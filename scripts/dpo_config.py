@@ -4,58 +4,58 @@ INSTRUCT_CONFIG = {
         "lr": 1e-5,
         "distributed": "ddp",
         "gpu_count": 1,
-        "batch_size": 16,
+        "batch_size": 8,
     },
     "1_2_b": {
-        "lr": 1e-5,
+        "lr": 2e-5,
         "distributed": "ddp",
         "gpu_count": 1,
         "batch_size": 10,
     },
     "2_4_b": {
-        "lr": 1e-5,
+        "lr": 2e-5,
         "distributed": "ddp",
         "gpu_count": 1,
-        "batch_size": 4,
+        "batch_size": 8,
         "use_lora": True
     },
     "4_5_b": {
-        "lr": 1e-5,
+        "lr": 2e-5,
         "distributed": "ddp",
         "gpu_count": 2,
-        "batch_size": 4,
+        "batch_size": 6,
         "use_lora": True
     },
     "5_9_b": {
-        "lr": 1e-5,
+        "lr": 2e-5,
         "distributed": "ddp",
         "gpu_count": 2,
         "batch_size": 4,
         "use_lora": True
     },
     "9_12_b": {
-        "lr": 8e-6,
+        "lr": 16e-6,
         "distributed": "ds",
         "gpu_count": 2,
         "use_lora": True,
         "batch_size": 4,
     },
     "12_15_b": {
-        "lr": 8e-6,
+        "lr": 12e-6,
         "distributed": "ds",
         "gpu_count": 4,
         "use_lora": True,
         "batch_size": 4,
     },
     "15_40_b": {
-        "lr": 8e-6,
+        "lr": 12e-6,
         "distributed": "ds",
         "gpu_count": 4,
         "use_lora": True,
         "batch_size": 2,
     },
     "40_80_b": {
-        "lr": 8e-6,
+        "lr": 10e-6,
         "distributed": "ds",
         "gpu_count": 8,
         "use_lora": True,
@@ -106,8 +106,8 @@ def modify_config(axolotl_config: dict, model_name: str, model_architecture: str
     axolotl_config["micro_batch_size"] = config["batch_size"]
     if config.get("use_lora", False):
         axolotl_config["adapter"] = "lora"
-        axolotl_config["lora_alpha"] = 512
-        axolotl_config["lora_r"] = 128
+        axolotl_config["lora_alpha"] = 256
+        axolotl_config["lora_r"] = 64
         axolotl_config["lora_dropout"] = 0.1
         axolotl_config["lora_target_linear"] = True
     
