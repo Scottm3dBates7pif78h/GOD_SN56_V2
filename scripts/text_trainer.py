@@ -36,6 +36,21 @@ from core.models.utility_models import TaskType
 from miner.logic.job_handler import create_reward_funcs_file
 
 from customized_config import customize_config, INSTRUCT, DPO, GRPO
+from customized_trainer import WhenToEvalHandler, CustomEvalSaveCallback, GRPOCustomEvalSaveCallback
+import torch.distributed as dist
+from transformers.trainer_utils import is_main_process
+from axolotl.train import Trainer
+from datetime import datetime, timezone, timedelta
+
+LOCAL_RANK = int(os.getenv("LOCAL_RANK", "0"))
+
+def setup_distributed():
+    if not dist.is_initialized():
+        dist.init_process_group(
+            backend="nccl",
+            init_method="env://"
+        )
+
 
 def patch_wandb_symlinks(base_dir:str):
     for root, _, files in os.walk(base_dir):
@@ -172,49 +187,6 @@ def create_config(task_id, model, dataset, dataset_type, file_format, output_dir
     return config_path
 
 
-def run_training(config_path):
-    print(f"Starting training with config: {config_path}", flush=True)
-    """Run the training process using the specified config file."""
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    training_env = os.environ.copy()
-    training_env["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-    training_env["HF_HUB_DISABLE_TELEMETRY"] = "1"
-
-    training_command = [
-    "accelerate", "launch",
-    "-m", "axolotl.cli.train",
-    config_path
-    ]
-
-    try:
-        print("Starting training subprocess...\n", flush=True)
-        process = subprocess.Popen(
-            training_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-
-        for line in process.stdout:
-            print(line, end="", flush=True)
-
-        return_code = process.wait()
-        if return_code != 0:
-            raise subprocess.CalledProcessError(return_code, training_command)
-
-        print("Training subprocess completed successfully.", flush=True)
-
-    except subprocess.CalledProcessError as e:
-        print("Training subprocess failed!", flush=True)
-        print(f"Exit Code: {e.returncode}", flush=True)
-        print(f"Command: {' '.join(e.cmd) if isinstance(e.cmd, list) else e.cmd}", flush=True)
-        raise RuntimeError(f"Training subprocess failed with exit code {e.returncode}")
-
-
-
 async def main():
     print("---STARTING TEXT TRAINING SCRIPT---", flush=True)
     parser = argparse.ArgumentParser(description="Text Model Training Script")
@@ -227,51 +199,84 @@ async def main():
     parser.add_argument("--expected-repo-name", help="Expected repository name")
     parser.add_argument("--hours-to-complete", type=float, required=True, help="Number of hours to complete the task")
     args = parser.parse_args()
+    original_model_name = args.model
+    original_task_type = args.task_type
 
-    for directory in train_cst.AXOLOTL_DIRECTORIES.values():
-        os.makedirs(directory, exist_ok=True)
-    try:
-        dataset_type_dict = json.loads(args.dataset_type)
-
-        if args.task_type == TaskType.DPOTASK.value:
-            dataset_type = DpoDatasetType(**dataset_type_dict)
-        elif args.task_type == TaskType.INSTRUCTTEXTTASK.value:
-            dataset_type = InstructTextDatasetType(**dataset_type_dict)
-        elif args.task_type == TaskType.GRPOTASK.value:
-            dataset_type = GrpoDatasetType(**dataset_type_dict)
-        else:
-            sys.exit(f"Unsupported task type: {args.task_type}")
-    except Exception as e:
-        sys.exit(f"Error creating dataset type object: {e}")
-
-    dataset_path = train_paths.get_text_dataset_path(args.task_id)
-    if args.task_type == TaskType.DPOTASK.value:
-        adapt_columns_for_dpo_dataset(dataset_path, dataset_type, apply_formatting=True)
-    elif args.task_type == TaskType.GRPOTASK.value:
-        adapt_columns_for_grpo_dataset(dataset_path, dataset_type)
-
-    dataset_path = copy_dataset_to_axolotl_directories(dataset_path)
-
-    output_dir = train_paths.get_checkpoints_output_path(args.task_id, args.expected_repo_name)
+    submission_dir = train_paths.get_checkpoints_output_path(args.task_id, args.expected_repo_name)
+    if not os.path.exists(submission_dir):
+        os.makedirs(submission_dir, exist_ok=True)
+    output_dir = train_paths.get_checkpoints_output_path(args.task_id, "temp")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
+    config_path = os.path.join(train_cst.AXOLOTL_DIRECTORIES["configs"], f"{args.task_id}.yml")
 
-    config_path = create_config(
-        args.task_id,
-        args.model,
-        dataset_path,
-        dataset_type,
-        args.file_format,
-        output_dir,
-        args.expected_repo_name,
-        log_wandb=True
-    )
+    if is_main_process(LOCAL_RANK):
+        for directory in train_cst.AXOLOTL_DIRECTORIES.values():
+            os.makedirs(directory, exist_ok=True)
+        try:
+            dataset_type_dict = json.loads(args.dataset_type)
 
-    run_training(config_path)
+            if args.task_type == TaskType.DPOTASK.value:
+                dataset_type = DpoDatasetType(**dataset_type_dict)
+            elif args.task_type == TaskType.INSTRUCTTEXTTASK.value:
+                dataset_type = InstructTextDatasetType(**dataset_type_dict)
+            elif args.task_type == TaskType.GRPOTASK.value:
+                dataset_type = GrpoDatasetType(**dataset_type_dict)
+            else:
+                sys.exit(f"Unsupported task type: {args.task_type}")
+        except Exception as e:
+            sys.exit(f"Error creating dataset type object: {e}")
 
-    patch_model_metadata(output_dir, args.model)
+        dataset_path = train_paths.get_text_dataset_path(args.task_id)
+        if args.task_type == TaskType.DPOTASK.value:
+            adapt_columns_for_dpo_dataset(dataset_path, dataset_type, apply_formatting=True)
+        elif args.task_type == TaskType.GRPOTASK.value:
+            adapt_columns_for_grpo_dataset(dataset_path, dataset_type)
 
-    patch_wandb_symlinks(train_cst.WANDB_LOGS_DIR)
+        dataset_path = copy_dataset_to_axolotl_directories(dataset_path)
+
+        create_config(
+            args.task_id,
+            args.model,
+            dataset_path,
+            dataset_type,
+            args.file_format,
+            output_dir,
+            args.expected_repo_name,
+            log_wandb=True
+        )
+
+
+    setup_distributed()
+    dist.barrier()
+
+    original_init = Trainer.__init__
+    # set the value of end_time = current time in UTC + hours_to_complete
+    end_time = datetime.now(timezone.utc) + timedelta(hours=args.hours_to_complete)
+    end_time = end_time.strftime("%Y-%m-%d %H:%M:%S")
+    print("end_time: ", end_time, flush=True)
+
+    def patched_init(self, *args, **kwargs):
+        callbacks = kwargs.get("callbacks", [])
+        
+        if original_task_type == TaskType.GRPOTASK.value:
+            when_to_eval_handler = WhenToEvalHandler(end_time, save_before_remaining_time=5)
+            callbacks.append(GRPOCustomEvalSaveCallback(when_to_eval_handler, submission_dir, output_dir, original_model_name))
+        else:
+            when_to_eval_handler = WhenToEvalHandler(end_time, save_before_remaining_time=5)
+            callbacks.append(CustomEvalSaveCallback(when_to_eval_handler, submission_dir, output_dir, original_model_name))
+        kwargs["callbacks"] = callbacks
+        original_init(self, *args, **kwargs)
+
+    Trainer.__init__ = patched_init
+      
+    # Load the config and call training directly instead of using CLI
+    from axolotl.cli.train import do_cli
+    
+    # Call training directly (this will use the patched Trainer.__init__)
+    do_cli(config=config_path)
+
+    
 
 
 if __name__ == "__main__":
