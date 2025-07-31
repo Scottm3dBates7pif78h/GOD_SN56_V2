@@ -243,8 +243,6 @@ async def create_next_round(
         if not winner_nodes:
             logger.error("No winner nodes found, cannot create next round")
             return
-        
-        logger.info(f"Successfully found {len(winner_nodes)} nodes out of {len(winners)} winners")
 
         logger.info(f"Successfully found {len(winner_nodes)} nodes out of {len(winners)} winners")
 
@@ -782,11 +780,13 @@ async def process_tournament_scheduling(config: Config):
     Checks both text and image tournaments independently.
     """
     logger.info("Processing tournament scheduling...")
+
     while True:
         try:
             # Check both tournament types
             for tournament_type in [TournamentType.TEXT, TournamentType.IMAGE]:
                 await check_and_start_tournament(tournament_type, config.psql_db, config)
+
         except Exception as e:
             logger.error(f"Error processing tournament scheduling: {e}")
         finally:
@@ -803,6 +803,7 @@ async def check_and_start_tournament(tournament_type: TournamentType, psql_db: P
         if active_tournament:
             logger.info(f"Active {tournament_type.value} tournament exists: {active_tournament.tournament_id}")
             return
+
         # Check if there's a pending tournament of this type
         pending_tournaments = await get_tournaments_with_status(TournamentStatus.PENDING, psql_db)
         pending_of_type = [t for t in pending_tournaments if t.tournament_type == tournament_type]

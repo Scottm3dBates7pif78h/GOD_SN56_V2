@@ -66,6 +66,7 @@ docker run --rm --gpus all \
   --expected-repo-name "$EXPECTED_REPO_NAME" \
   --hours-to-complete 1
 
+
 echo "Uploading model to HuggingFace..."
 docker run --rm --gpus all \
   --volume "$OUTPUTS_DIR:/app/checkpoints/:rw" \
