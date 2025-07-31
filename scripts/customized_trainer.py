@@ -19,6 +19,7 @@ import logging, time, traceback
 from huggingface_hub.utils import HfHubHTTPError
 from huggingface_hub import HfApi
 import trainer.constants as train_cst
+import trainer.utils.training_paths as train_paths
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", "0"))
 
@@ -96,10 +97,10 @@ class CustomEvalSaveCallback(TrainerCallback):
             print(f"Latest checkpoint found: {latest_checkpoint}")
             try:
                 print(f"Detected PEFT adapter: merging with base model...")
+                original_model_name = str(train_paths.get_text_base_model_path(self.original_model_name))
+                base_model = AutoModelForCausalLM.from_pretrained(original_model_name, trust_remote_code=True)
 
-                base_model = AutoModelForCausalLM.from_pretrained(self.original_model_name, trust_remote_code=True)
-
-                tokenizer = AutoTokenizer.from_pretrained(self.original_model_name, trust_remote_code=True)
+                tokenizer = AutoTokenizer.from_pretrained(original_model_name, trust_remote_code=True)
                 tokenizer.save_pretrained(self.submission_dir)
 
                 num_tokens = len(tokenizer)

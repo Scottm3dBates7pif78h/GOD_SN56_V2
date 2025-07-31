@@ -61,7 +61,7 @@ wandb_mode: offline
 wandb_run: your_name
 wandb_runid: default
 
-save_steps: 50
+saves_per_epoch: 1
 warmup_steps: 10
 eval_table_size:
 eval_max_new_tokens: 128

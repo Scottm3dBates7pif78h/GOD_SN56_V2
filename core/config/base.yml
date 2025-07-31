@@ -64,7 +64,7 @@ wandb_runid: default
 
 warmup_steps: 10
 eval_sample_packing: false
-save_steps: 50
+saves_per_epoch: 1
 eval_table_size:
 debug:
 deepspeed:

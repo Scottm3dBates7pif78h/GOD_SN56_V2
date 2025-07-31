@@ -205,7 +205,7 @@ async def main():
     submission_dir = train_paths.get_checkpoints_output_path(args.task_id, args.expected_repo_name)
     if not os.path.exists(submission_dir):
         os.makedirs(submission_dir, exist_ok=True)
-    output_dir = train_paths.get_checkpoints_output_path(args.task_id, "temp")
+    output_dir = train_paths.get_checkpoints_output_path(args.task_id, f"{args.expected_repo_name}_temp")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
     config_path = os.path.join(train_cst.AXOLOTL_DIRECTORIES["configs"], f"{args.task_id}.yml")
