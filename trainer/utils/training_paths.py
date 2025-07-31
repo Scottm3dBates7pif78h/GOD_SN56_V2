@@ -29,11 +29,8 @@ def get_image_training_config_template_path(model_type: str) -> str:
         return str(Path(train_cst.IMAGE_CONTAINER_CONFIG_TEMPLATE_PATH) / "base_diffusion_flux.toml")
 
 def get_image_training_zip_save_path(task_id: str) -> str:
-    return str(Path(train_cst.CACHE_DATASETS_DIR) / f"{task_id}_tourn.zip")
 
-def get_text_dataset_path(task_id: str) -> str:
     return str(Path(train_cst.CACHE_DATASETS_DIR) / f"{task_id}_train_data.json")
-
 def get_axolotl_dataset_paths(dataset_filename: str) -> tuple[str, str]:
     data_path = str(Path(train_cst.AXOLOTL_DIRECTORIES["data"]) / dataset_filename)
     root_path = str(Path(train_cst.AXOLOTL_DIRECTORIES["root"]) / dataset_filename)
